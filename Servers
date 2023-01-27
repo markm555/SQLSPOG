@@ -1,30 +1,32 @@
-//SQL Servers Kusto Query
-
 resources
 	| where type =~ 'Microsoft.Sql/servers' or type == 'microsoft.azurearcdata/sqlserverinstances' or type == 'microsoft.sql/managedinstances'
 	| extend propertiesState = tostring(properties.state)
 	| extend propertiesStatus = tostring(properties.status)
-	| extend cores = tostring(properties.vCore)
 	| extend version = tostring(properties.currentVersion )
+	| extend vcore = tostring(properties.vCore)
+	| extend vcores = tostring(properties.vCores)
 	| extend SQLversion = case( substring(version, 0, 2) == "16", "SQL 2022",
 							substring(version, 0, 2) == "15", "SQL 2019",
 							substring(version, 0, 2) == "14", "SQL 2017",
-							substring(version, 0, 2) == "13", "SQL 2026",
+							substring(version, 0, 2) == "13", "SQL 2016",
 							substring(version, 0, 2) == "12", "SQL 2014",
 							substring(version, 0, 2) == "11", "SQL 2012",
 							substring(version, 0, 2) == "11", "SQL 2008 R2",
-							isempty(propertiesState), "",    "")
+							isempty(propertiesState), "",    "Unknown")
 	| extend edition = tostring(properties.edition)
 	| extend patch = tostring(properties.patchLevel)
-	| extend status = case(    propertiesState == "Degraded", "Degraded",    
+	| extend state = case(    propertiesState == "Degraded", "Degraded",    
 							  propertiesState == "Warned", "Warned",    
 							  propertiesState == "Disabled", "Disabled",    
 							  propertiesState == "Ready", "Available",    
-							  propertiesState == "Reserved", "Reserved",
+							  propertiesState == "Reserved", "Reserved",  
 							  propertiesStatus == "Connected", "Connected",  
 							  isempty(propertiesState), "",    "Unknown")
     | extend type = case(     ['type'] == "microsoft.sql/servers", "Azure SQL",
                               ['type'] == "microsoft.sql/managedinstances", "SQL MI",
                               ['type'] == "microsoft.azurearcdata/sqlserverinstances", "On-Premises",
                               isempty(['type']), "",    "Unknown")
-	| project id, name, type, SQLversion, edition, patch, cores, status
+	| extend Cores = case (   vcore != "", tostring(vcore), 
+							  vcores != "", tostring(vcores),
+							  isempty(propertiesState), "",    "N/A")
+	| project id, name, type, SQLversion,  edition, Cores, patch,  state
