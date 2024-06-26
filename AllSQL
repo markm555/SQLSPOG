@@ -1,4 +1,5 @@
 // This file is a kusto query that will lsit all SQL Servers registered with ARC Extended SQL including those in GCP and AWS.
+// Updated 6/26/2024 to make the join work for SQL servers with multiple instances that have the machine name as machine_instance.
 resources
     |where type =~ 'Microsoft.Sql/servers' 
          or type == 'microsoft.azurearcdata/sqlserverinstances' 
@@ -30,7 +31,17 @@ resources
                                     substring(properties.patchLevel,5,4) == "1000", "SQL 2022 (RTM)",
                                     isempty(properties.patchlevel), "", "Unknown") ,
                                 substring(version, 0, 2) == "15", 
-                                    case( substring(properties.patchLevel,5,4) == "4298", "SQL 2019 (CU19)",
+                                    case( substring(properties.patchLevel,5,4) == "4375", "SQL 2019 (CU27)",
+                                    substring(properties.patchLevel,5,4) == "4365", "SQL 2019 (CU26)",
+                                    substring(properties.patchLevel,5,4) == "4360", "SQL 2019 (CU25)",
+                                    substring(properties.patchLevel,5,4) == "4355", "SQL 2019 (CU25)",
+                                    substring(properties.patchLevel,5,4) == "4345", "SQL 2019 (CU24)",
+                                    substring(properties.patchLevel,5,4) == "4335", "SQL 2019 (CU23)",
+                                    substring(properties.patchLevel,5,4) == "4326", "SQL 2019 (CU22)",
+                                    substring(properties.patchLevel,5,4) == "4322", "SQL 2019 (CU22)",
+                                    substring(properties.patchLevel,5,4) == "4316", "SQL 2019 (CU21)",
+                                    substring(properties.patchLevel,5,4) == "4312", "SQL 2019 (CU20)",
+                                    substring(properties.patchLevel,5,4) == "4298", "SQL 2019 (CU19)",
                                     substring(properties.patchLevel,5,4) == "4261", "SQL 2019 (CU18)",
                                     substring(properties.patchLevel,5,4) == "4249", "SQL 2019 (CU17)",
                                     substring(properties.patchLevel,5,4) == "4223", "SQL 2019 (CU16)",
@@ -362,6 +373,7 @@ resources
                                     isempty(properties.patchLevel), "", "Unknown"),
                                 substring(version, 0, 2) == "11", "SQL 2008 R2",
                                 isempty(propertiesState), "",    "Unknown")
+    | extend originalName = tostring(split(name, '_')[0])
 |join kind = fullouter (
 resources
 | where type =~ 'Microsoft.HybridCompute/machines'
@@ -369,13 +381,17 @@ resources
 | extend vp = tostring(properties)
 | extend Manufact= substring(properties.detectedProperties.manufacturer,0,9)
 | extend OS = tostring(properties.osName)
+| extend Env = tostring(tags.Env)
 | extend Model = tostring(properties.detectedProperties.model)
+| extend Memory = tostring(properties.detectedProperties.totalPhysicalMemoryInGigabytes)
 | extend OSVer = tostring(properties.osVersion)
-| extend vmprop = tostring(properties)) on name
+| extend vmprop = tostring(properties)
+| extend originalName = tostring(name)  // Modify this line
+) on originalName  // Modify this line
     | extend location = case(    ['type'] == "microsoft.sql/servers", "Azure SQL",
                               ['type'] == "microsoft.sql/managedinstances", "SQL MI",
                               cp == "AWS", "AWS",
                               cp == "GCP", "GCP",
                               ['type'] == "microsoft.azurearcdata/sqlserverinstances", "On-Premises",
                               isempty(['type']), "",    "Unknown")
-    | project id, name, OS, location, Manufact, Model, SQLversion,  edition, license, Cores
+| project id, name, OS, OSVer, location, Manufact, Model, SQLversion,  edition, license, Cores, Memory, Env, state
